@@ -21,41 +21,64 @@ def send_telegram(message):
 
 def get_signal(symbol):
 
-    data = yf.download(symbol, period="5d", interval="5m")
+    data = yf.download(symbol, period="1d", interval="5m")
 
     if data.empty:
-        return "No data"
+        return None
 
     close = data["Close"].squeeze()
+    volume = data["Volume"].squeeze()
 
     rsi = ta.momentum.RSIIndicator(close).rsi()
     ema9 = ta.trend.EMAIndicator(close, window=9).ema_indicator()
     ema21 = ta.trend.EMAIndicator(close, window=21).ema_indicator()
 
+    last_price = close.iloc[-1]
     last_rsi = rsi.dropna().iloc[-1]
     last_ema9 = ema9.dropna().iloc[-1]
     last_ema21 = ema21.dropna().iloc[-1]
 
-    if last_rsi < 30 and last_ema9 > last_ema21:
-        return "✅ BUY"
-    elif last_rsi > 70 and last_ema9 < last_ema21:
-        return "❌ SELL"
-    else:
-        return "⏳ WAIT"
+    avg_volume = volume.mean()
+    last_volume = volume.iloc[-1]
+
+    if last_rsi < 35 and last_ema9 > last_ema21 and last_volume > avg_volume:
+
+        entry = round(last_price, 2)
+        sl = round(entry * 0.99, 2)
+        target = round(entry * 1.02, 2)
+
+        return f"✅ BUY\nEntry: {entry}\nSL: {sl}\nTarget: {target}"
+
+    elif last_rsi > 65 and last_ema9 < last_ema21 and last_volume > avg_volume:
+
+        entry = round(last_price, 2)
+        sl = round(entry * 1.01, 2)
+        target = round(entry * 0.98, 2)
+
+        return f"❌ SELL\nEntry: {entry}\nSL: {sl}\nTarget: {target}"
+
+    return None
 
 
 def scan_market():
 
-    message = "📊 INTRADAY SIGNAL SCANNER\n\n"
+    message = "📊 INTRADAY TRADE SIGNALS\n\n"
+
+    signal_found = False
 
     for name, symbol in stocks.items():
+
         signal = get_signal(symbol)
-        message += f"{name} → {signal}\n"
 
-    print(message)
-    send_telegram(message)
+        if signal:
+            signal_found = True
+            message += f"{name}\n{signal}\n\n"
+
+    if signal_found:
+        send_telegram(message)
+        print(message)
+    else:
+        print("No strong signals now")
 
 
-while True:
-    scan_market()
-    time.sleep(300)
+scan_market()
