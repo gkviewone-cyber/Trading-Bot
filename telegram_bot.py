@@ -11,7 +11,17 @@ stocks = {
     "TCS": "TCS.NS",
     "INFY": "INFY.NS",
     "HDFCBANK": "HDFCBANK.NS",
-    "ICICIBANK": "ICICIBANK.NS"
+    "ICICIBANK": "ICICIBANK.NS",
+    "SBIN": "SBIN.NS",
+    "ITC": "ITC.NS",
+    "LT": "LT.NS",
+    "AXISBANK": "AXISBANK.NS",
+    "KOTAKBANK": "KOTAKBANK.NS",
+    "BHARTIARTL": "BHARTIARTL.NS",
+    "HCLTECH": "HCLTECH.NS",
+    "WIPRO": "WIPRO.NS",
+    "MARUTI": "MARUTI.NS",
+    "TITAN": "TITAN.NS"
 }
 
 def send_telegram(message):
