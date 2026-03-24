@@ -1,18 +1,15 @@
-name: Run Trading Bot Every 5 Minutes
+name: Run Telegram Trading Bot
 
 on:
-  workflow_dispatch:
-
   schedule:
-    # 9:15 AM – 9:59 AM IST
-    - cron: "15-59/5 3 * * 1-5"
 
-    # 10:00 AM – 2:59 PM IST
-    - cron: "*/5 4-9 * * 1-5"
+    # 9:20 AM IST
+    - cron: "50 3 * * 1-5"
 
-    # 3:00 PM – 3:30 PM IST
-    - cron: "0,5,10,15,20,25,30 10 * * 1-5"
+    # Every 5 minutes till 3:30 PM IST
+    - cron: "*/5 4-10 * * 1-5"
 
+  workflow_dispatch:
 
 jobs:
   run-bot:
@@ -20,18 +17,18 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
           pip install yfinance
-          pip install ta
           pip install requests
+          pip install pytz
 
-      - name: Run Telegram Trading Bot
+      - name: Run trading bot
         run: python telegram_bot.py
