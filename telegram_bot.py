@@ -7,8 +7,8 @@ import requests
 # TELEGRAM SETTINGS
 # ======================
 
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
-CHAT_ID = "YOUR_CHAT_ID_HERE"
+BOT_TOKEN = "8677504246:AAFq6kPDoX410tz3kodv5ZQaqviiZ5JEfBc"
+CHAT_ID = "8791344518"
 
 
 # ======================
