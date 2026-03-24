@@ -1,8 +1,10 @@
 name: Run Trading Bot Every 5 Minutes
 
 on:
+  workflow_dispatch:
+
   schedule:
-       # 9:15 AM – 9:59 AM IST
+    # 9:15 AM – 9:59 AM IST
     - cron: "15-59/5 3 * * 1-5"
 
     # 10:00 AM – 2:59 PM IST
@@ -10,7 +12,7 @@ on:
 
     # 3:00 PM – 3:30 PM IST
     - cron: "0,5,10,15,20,25,30 10 * * 1-5"
-  workflow_dispatch:
+
 
 jobs:
   run-bot:
@@ -23,10 +25,13 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: "3.10"
 
       - name: Install dependencies
-        run: pip install yfinance ta requests pandas
+        run: |
+          pip install yfinance
+          pip install ta
+          pip install requests
 
-      - name: Run bot
+      - name: Run Telegram Trading Bot
         run: python telegram_bot.py
