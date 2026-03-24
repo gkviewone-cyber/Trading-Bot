@@ -7,7 +7,7 @@ import time
 
 BOT_TOKEN = "8677504246:AAFq6kPDoX410tz3kodv5ZQaqviiZ5JEfBc"
 CHAT_ID = "8791344518"
-
+send_telegram("✅ Bot connected successfully")
 
 MAX_PRICE = 500
 
