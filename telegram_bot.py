@@ -12,7 +12,9 @@ CHAT_ID = "8791344518"
 MAX_PRICE = 500
 
 
-symbols = {
+# STOCKS UNDER ₹500
+
+stocks = {
 
 "SBIN":"SBIN.NS",
 "ITC":"ITC.NS",
@@ -30,6 +32,17 @@ symbols = {
 "SAIL":"SAIL.NS",
 "IRFC":"IRFC.NS",
 "NBCC":"NBCC.NS"
+
+}
+
+
+# INDEX SYMBOLS
+
+indices = {
+
+"NIFTY":"^NSEI",
+"BANKNIFTY":"^NSEBANK",
+"SENSEX":"^BSESN"
 
 }
 
@@ -62,7 +75,7 @@ def market_open():
     return start <= now <= end
 
 
-def opening_range_breakout(symbol, name):
+def breakout_logic(symbol, name, is_index=False):
 
     try:
 
@@ -83,18 +96,17 @@ def opening_range_breakout(symbol, name):
 
 
         range_high = first_20["High"].max()
-
         range_low = first_20["Low"].min()
 
         last_price = data["Close"].iloc[-1]
 
 
-        if last_price > MAX_PRICE:
-            return
+        if not is_index:
+            if last_price > MAX_PRICE:
+                return
 
 
         avg_volume = data["Volume"].mean()
-
         last_volume = data["Volume"].iloc[-1]
 
 
@@ -103,9 +115,7 @@ def opening_range_breakout(symbol, name):
         if last_price > range_high and last_volume > avg_volume:
 
             entry = round(last_price,2)
-
             sl = round(range_low,2)
-
             target = round(entry * 1.02,2)
 
 
@@ -120,7 +130,6 @@ Target: {target}
 """
 
             send_telegram(message)
-
             print(message)
 
             sent_today.add(name)
@@ -131,9 +140,7 @@ Target: {target}
         elif last_price < range_low and last_volume > avg_volume:
 
             entry = round(last_price,2)
-
             sl = round(range_high,2)
-
             target = round(entry * 0.98,2)
 
 
@@ -148,7 +155,6 @@ Target: {target}
 """
 
             send_telegram(message)
-
             print(message)
 
             sent_today.add(name)
@@ -165,9 +171,14 @@ def scan_market():
         return
 
 
-    for name, symbol in symbols.items():
+    for name, symbol in indices.items():
 
-        opening_range_breakout(symbol, name)
+        breakout_logic(symbol, name, True)
+
+
+    for name, symbol in stocks.items():
+
+        breakout_logic(symbol, name)
 
 
 while True:
