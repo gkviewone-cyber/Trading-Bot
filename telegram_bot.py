@@ -1,119 +1,111 @@
 import yfinance as yf
 import ta
 import requests
+import time
 
-
-# ======================
-# TELEGRAM SETTINGS
-# ======================
-
+# 🔐 Replace with your Telegram bot token
 BOT_TOKEN = "8677504246:AAFq6kPDoX410tz3kodv5ZQaqviiZ5JEfBc"
+
+# 🔐 Replace with your chat ID
 CHAT_ID = "8791344518"
 
 
-# ======================
-# STOCK LIST
-# ======================
-
+# 📊 Stock list
 stocks = {
     "RELIANCE": "RELIANCE.NS",
     "TCS": "TCS.NS",
     "INFY": "INFY.NS",
     "HDFCBANK": "HDFCBANK.NS",
-    "ICICIBANK": "ICICIBANK.NS"
+    "ICICIBANK": "ICICIBANK.NS",
+    "SBIN": "SBIN.NS",
+    "ITC": "ITC.NS",
+    "LT": "LT.NS",
+    "AXISBANK": "AXISBANK.NS",
+    "KOTAKBANK": "KOTAKBANK.NS",
+    "BHARTIARTL": "BHARTIARTL.NS",
+    "HCLTECH": "HCLTECH.NS",
+    "WIPRO": "WIPRO.NS",
+    "MARUTI": "MARUTI.NS",
+    "TITAN": "TITAN.NS"
 }
 
 
-# ======================
-# TELEGRAM FUNCTION
-# ======================
-
-def send_telegram(message):
-
+# 📩 Telegram send function
+def send_message(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-    try:
-        requests.post(url, data={
+    requests.post(
+        url,
+        data={
             "chat_id": CHAT_ID,
             "text": message
-        })
-    except:
-        print("Telegram send failed")
+        }
+    )
 
 
-# ======================
-# SIGNAL FUNCTION
-# ======================
-
-def get_signal(symbol):
+# 📈 Signal generator function
+def generate_signal(stock_name, ticker):
 
     try:
-
-        data = yf.download(symbol, period="5d", interval="5m")
+        data = yf.download(
+            ticker,
+            period="1d",
+            interval="5m"
+        )
 
         if data.empty:
-            return "No data"
+            return f"{stock_name}: Data not available"
 
-        close = data["Close"].squeeze()
+        close = data["Close"]
 
+        # EMA indicators
+        ema_9 = ta.trend.ema_indicator(close, window=9)
+        ema_21 = ta.trend.ema_indicator(close, window=21)
+
+        # RSI indicator
         rsi = ta.momentum.RSIIndicator(close).rsi()
 
-        ema9 = ta.trend.EMAIndicator(close, window=9).ema_indicator()
-        ema21 = ta.trend.EMAIndicator(close, window=21).ema_indicator()
+        latest_price = close.iloc[-1]
+        latest_ema9 = ema_9.iloc[-1]
+        latest_ema21 = ema_21.iloc[-1]
+        latest_rsi = rsi.iloc[-1]
 
-        last_rsi = rsi.dropna().iloc[-1]
-        last_ema9 = ema9.dropna().iloc[-1]
-        last_ema21 = ema21.dropna().iloc[-1]
+        # 📊 Trading logic
+        if latest_ema9 > latest_ema21 and latest_rsi < 70:
+            signal = "BUY 📈"
 
-
-        # SIGNAL CONDITIONS
-
-        if last_rsi < 35 and last_ema9 > last_ema21:
-            return "✅ BUY"
-
-        elif last_rsi > 65 and last_ema9 < last_ema21:
-            return "❌ SELL"
+        elif latest_ema9 < latest_ema21 and latest_rsi > 30:
+            signal = "SELL 📉"
 
         else:
-            return "⏳ WAIT"
+            signal = "HOLD ⏸️"
 
-    except:
-        return "Error"
+        return (
+            f"{stock_name}\n"
+            f"Price: {round(latest_price,2)}\n"
+            f"RSI: {round(latest_rsi,2)}\n"
+            f"Signal: {signal}"
+        )
 
-
-# ======================
-# MAIN SCANNER FUNCTION
-# ======================
-
-def scan_market():
-
-    message = "📊 INTRADAY SIGNAL SCANNER\n\n"
-
-    signal_found = False
-
-    for name, symbol in stocks.items():
-
-        signal = get_signal(symbol)
-
-        if signal in ["✅ BUY", "❌ SELL"]:
-            signal_found = True
-
-        message += f"{name} → {signal}\n"
+    except Exception as e:
+        return f"{stock_name}: Error generating signal"
 
 
-    if not signal_found:
+# 🚀 Main execution
+def main():
 
-        message += "\n✅ Bot running normally"
-        message += "\nNo strong signals now"
+    send_message("📊 Trading Signals Update")
+
+    for stock_name, ticker in stocks.items():
+
+        signal_message = generate_signal(stock_name, ticker)
+
+        send_message(signal_message)
+
+        # Prevent Telegram rate limit block
+        time.sleep(1)
 
 
-    print(message)
-
-    send_telegram(message)
-
-
-# ======================
-# RUN BOT
-# ======================
-
-scan_market()
+# ▶ Run bot
+if __name__ == "__main__":
+    main()
