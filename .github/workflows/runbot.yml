@@ -2,7 +2,14 @@ name: Run Trading Bot Every 5 Minutes
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+       # 9:15 AM – 9:59 AM IST
+    - cron: "15-59/5 3 * * 1-5"
+
+    # 10:00 AM – 2:59 PM IST
+    - cron: "*/5 4-9 * * 1-5"
+
+    # 3:00 PM – 3:30 PM IST
+    - cron: "0,5,10,15,20,25,30 10 * * 1-5"
   workflow_dispatch:
 
 jobs:
