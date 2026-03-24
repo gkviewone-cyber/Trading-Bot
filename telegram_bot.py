@@ -2,17 +2,14 @@ import yfinance as yf
 import requests
 from datetime import datetime
 import pytz
-import time
 
 
 BOT_TOKEN = "8677504246:AAFq6kPDoX410tz3kodv5ZQaqviiZ5JEfBc"
 CHAT_ID = "8791344518"
-send_telegram("✅ Bot connected successfully")
+
 
 MAX_PRICE = 500
 
-
-# STOCKS UNDER ₹500
 
 stocks = {
 
@@ -36,8 +33,6 @@ stocks = {
 }
 
 
-# INDEX SYMBOLS
-
 indices = {
 
 "NIFTY":"^NSEI",
@@ -45,9 +40,6 @@ indices = {
 "SENSEX":"^BSESN"
 
 }
-
-
-sent_today = set()
 
 
 def send_telegram(message):
@@ -79,10 +71,6 @@ def breakout_logic(symbol, name, is_index=False):
 
     try:
 
-        if name in sent_today:
-            return
-
-
         data = yf.download(symbol, period="1d", interval="5m")
 
         if data.empty:
@@ -101,16 +89,13 @@ def breakout_logic(symbol, name, is_index=False):
         last_price = data["Close"].iloc[-1]
 
 
-        if not is_index:
-            if last_price > MAX_PRICE:
-                return
+        if not is_index and last_price > MAX_PRICE:
+            return
 
 
         avg_volume = data["Volume"].mean()
         last_volume = data["Volume"].iloc[-1]
 
-
-        # BUY BREAKOUT
 
         if last_price > range_high and last_volume > avg_volume:
 
@@ -119,23 +104,10 @@ def breakout_logic(symbol, name, is_index=False):
             target = round(entry * 1.02,2)
 
 
-            message = f"""
-🚨 9:20 BREAKOUT BUY
-
-{name}
-
-Entry: {entry}
-SL: {sl}
-Target: {target}
-"""
+            message = f"🚨 9:20 BREAKOUT BUY\n{name}\nEntry:{entry}\nSL:{sl}\nTarget:{target}"
 
             send_telegram(message)
-            print(message)
 
-            sent_today.add(name)
-
-
-        # SELL BREAKDOWN
 
         elif last_price < range_low and last_volume > avg_volume:
 
@@ -144,20 +116,9 @@ Target: {target}
             target = round(entry * 0.98,2)
 
 
-            message = f"""
-🚨 9:20 BREAKOUT SELL
-
-{name}
-
-Entry: {entry}
-SL: {sl}
-Target: {target}
-"""
+            message = f"🚨 9:20 BREAKOUT SELL\n{name}\nEntry:{entry}\nSL:{sl}\nTarget:{target}"
 
             send_telegram(message)
-            print(message)
-
-            sent_today.add(name)
 
 
     except:
@@ -181,8 +142,4 @@ def scan_market():
         breakout_logic(symbol, name)
 
 
-while True:
-
-    scan_market()
-
-    time.sleep(300)
+scan_market()
