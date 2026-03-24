@@ -1,111 +1,177 @@
 import yfinance as yf
-import ta
 import requests
+from datetime import datetime
+import pytz
 import time
 
-# 🔐 Replace with your Telegram bot token
-BOT_TOKEN = "8677504246:AAFq6kPDoX410tz3kodv5ZQaqviiZ5JEfBc"
 
-# 🔐 Replace with your chat ID
+BOT_TOKEN = "8677504246:AAFq6kPDoX410tz3kodv5ZQaqviiZ5JEfBc"
 CHAT_ID = "8791344518"
 
 
-# 📊 Stock list
-stocks = {
-    "RELIANCE": "RELIANCE.NS",
-    "TCS": "TCS.NS",
-    "INFY": "INFY.NS",
-    "HDFCBANK": "HDFCBANK.NS",
-    "ICICIBANK": "ICICIBANK.NS",
-    "SBIN": "SBIN.NS",
-    "ITC": "ITC.NS",
-    "LT": "LT.NS",
-    "AXISBANK": "AXISBANK.NS",
-    "KOTAKBANK": "KOTAKBANK.NS",
-    "BHARTIARTL": "BHARTIARTL.NS",
-    "HCLTECH": "HCLTECH.NS",
-    "WIPRO": "WIPRO.NS",
-    "MARUTI": "MARUTI.NS",
-    "TITAN": "TITAN.NS"
+MAX_PRICE = 500
+
+
+symbols = {
+
+"SBIN":"SBIN.NS",
+"ITC":"ITC.NS",
+"WIPRO":"WIPRO.NS",
+"NTPC":"NTPC.NS",
+"POWERGRID":"POWERGRID.NS",
+"TATAMOTORS":"TATAMOTORS.NS",
+"COALINDIA":"COALINDIA.NS",
+"IOC":"IOC.NS",
+"ONGC":"ONGC.NS",
+"PNB":"PNB.NS",
+"CANBK":"CANBK.NS",
+"IDFCFIRSTB":"IDFCFIRSTB.NS",
+"BHEL":"BHEL.NS",
+"SAIL":"SAIL.NS",
+"IRFC":"IRFC.NS",
+"NBCC":"NBCC.NS"
+
 }
 
 
-# 📩 Telegram send function
-def send_message(message):
+sent_today = set()
+
+
+def send_telegram(message):
+
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-    requests.post(
-        url,
-        data={
-            "chat_id": CHAT_ID,
-            "text": message
-        }
-    )
+    requests.post(url, data={
+        "chat_id": CHAT_ID,
+        "text": message
+    })
 
 
-# 📈 Signal generator function
-def generate_signal(stock_name, ticker):
+def market_open():
+
+    india = pytz.timezone("Asia/Kolkata")
+
+    now = datetime.now(india)
+
+    if now.weekday() >= 5:
+        return False
+
+    start = now.replace(hour=9, minute=20, second=0)
+    end = now.replace(hour=15, minute=30, second=0)
+
+    return start <= now <= end
+
+
+def opening_range_breakout(symbol, name):
 
     try:
-        data = yf.download(
-            ticker,
-            period="1d",
-            interval="5m"
-        )
+
+        if name in sent_today:
+            return
+
+
+        data = yf.download(symbol, period="1d", interval="5m")
 
         if data.empty:
-            return f"{stock_name}: Data not available"
-
-        close = data["Close"]
-
-        # EMA indicators
-        ema_9 = ta.trend.ema_indicator(close, window=9)
-        ema_21 = ta.trend.ema_indicator(close, window=21)
-
-        # RSI indicator
-        rsi = ta.momentum.RSIIndicator(close).rsi()
-
-        latest_price = close.iloc[-1]
-        latest_ema9 = ema_9.iloc[-1]
-        latest_ema21 = ema_21.iloc[-1]
-        latest_rsi = rsi.iloc[-1]
-
-        # 📊 Trading logic
-        if latest_ema9 > latest_ema21 and latest_rsi < 70:
-            signal = "BUY 📈"
-
-        elif latest_ema9 < latest_ema21 and latest_rsi > 30:
-            signal = "SELL 📉"
-
-        else:
-            signal = "HOLD ⏸️"
-
-        return (
-            f"{stock_name}\n"
-            f"Price: {round(latest_price,2)}\n"
-            f"RSI: {round(latest_rsi,2)}\n"
-            f"Signal: {signal}"
-        )
-
-    except Exception as e:
-        return f"{stock_name}: Error generating signal"
+            return
 
 
-# 🚀 Main execution
-def main():
+        first_20 = data.between_time("09:15","09:20")
 
-    send_message("📊 Trading Signals Update")
-
-    for stock_name, ticker in stocks.items():
-
-        signal_message = generate_signal(stock_name, ticker)
-
-        send_message(signal_message)
-
-        # Prevent Telegram rate limit block
-        time.sleep(1)
+        if first_20.empty:
+            return
 
 
-# ▶ Run bot
-if __name__ == "__main__":
-    main()
+        range_high = first_20["High"].max()
+
+        range_low = first_20["Low"].min()
+
+        last_price = data["Close"].iloc[-1]
+
+
+        if last_price > MAX_PRICE:
+            return
+
+
+        avg_volume = data["Volume"].mean()
+
+        last_volume = data["Volume"].iloc[-1]
+
+
+        # BUY BREAKOUT
+
+        if last_price > range_high and last_volume > avg_volume:
+
+            entry = round(last_price,2)
+
+            sl = round(range_low,2)
+
+            target = round(entry * 1.02,2)
+
+
+            message = f"""
+🚨 9:20 BREAKOUT BUY
+
+{name}
+
+Entry: {entry}
+SL: {sl}
+Target: {target}
+"""
+
+            send_telegram(message)
+
+            print(message)
+
+            sent_today.add(name)
+
+
+        # SELL BREAKDOWN
+
+        elif last_price < range_low and last_volume > avg_volume:
+
+            entry = round(last_price,2)
+
+            sl = round(range_high,2)
+
+            target = round(entry * 0.98,2)
+
+
+            message = f"""
+🚨 9:20 BREAKOUT SELL
+
+{name}
+
+Entry: {entry}
+SL: {sl}
+Target: {target}
+"""
+
+            send_telegram(message)
+
+            print(message)
+
+            sent_today.add(name)
+
+
+    except:
+
+        pass
+
+
+def scan_market():
+
+    if not market_open():
+        return
+
+
+    for name, symbol in symbols.items():
+
+        opening_range_breakout(symbol, name)
+
+
+while True:
+
+    scan_market()
+
+    time.sleep(300)
