@@ -1,4 +1,4 @@
-name: Run Telegram Trading Bot
+name: Telegram Trading Bot
 
 on:
   schedule:
@@ -7,20 +7,22 @@ on:
 
 jobs:
   run-bot:
+
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+    - name: Checkout repo
+      uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          pip install yfinance pandas ta requests pytz
+    - name: Setup python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
 
-      - name: Run bot
-        run: python telegram_bot.py
+    - name: Install libraries
+      run: |
+        pip install yfinance pandas ta requests pytz
+
+    - name: Run bot
+      run: python telegram_bot.py
