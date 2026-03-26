@@ -8,7 +8,7 @@ import pytz
 BOT_TOKEN = "8677504246:AAFq6kPDoX410tz3kodv5ZQaqviiZ5JEfBc"
 CHAT_ID = "8791344518"
 
-CAPITAL = 1400   # 800 + 600 combined capital
+CAPITAL = 1400
 LEVERAGE = 10
 
 stocks = {
@@ -34,20 +34,18 @@ stocks = {
 "MARUTI":"MARUTI.NS"
 }
 
-indices = {
-
-"NIFTY":"^NSEI",
-"BANKNIFTY":"^NSEBANK",
-"SENSEX":"^BSESN"
-
-}
-
 
 def send_telegram(message):
 
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    try:
 
-    requests.post(url,data={"chat_id":CHAT_ID,"text":message})
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+
+        requests.post(url,data={"chat_id":CHAT_ID,"text":message})
+
+    except Exception as e:
+
+        print("Telegram error:",e)
 
 
 def market_open():
@@ -57,23 +55,18 @@ def market_open():
     now=datetime.now(india)
 
     if now.weekday()>=5:
-
         return False
 
     if now.hour<9:
-
         return False
 
     if now.hour==9 and now.minute<20:
-
         return False
 
     if now.hour>15:
-
         return False
 
     if now.hour==15 and now.minute>30:
-
         return False
 
     return True
@@ -86,7 +79,6 @@ def quantity(price):
     qty=int(buying_power/price)
 
     if qty<1:
-
         qty=1
 
     return qty
@@ -103,94 +95,80 @@ def vwap(df):
 
 def strategy(symbol,name):
 
-    df=yf.download(symbol,period="1d",interval="5m")
+    try:
 
-    if df.empty:
+        df=yf.download(symbol,period="1d",interval="5m",progress=False)
+
+        if df is None or df.empty:
+            return None
+
+        df.dropna(inplace=True)
+
+        if len(df)<10:
+            return None
+
+        df["VWAP"]=vwap(df)
+
+        df["EMA9"]=df["Close"].ewm(span=9).mean()
+
+        df["EMA21"]=df["Close"].ewm(span=21).mean()
+
+        rsi=ta.momentum.RSIIndicator(df["Close"]).rsi()
+
+        price=df["Close"].iloc[-1]
+
+        last_vwap=df["VWAP"].iloc[-1]
+
+        last_ema9=df["EMA9"].iloc[-1]
+
+        last_ema21=df["EMA21"].iloc[-1]
+
+        last_rsi=rsi.iloc[-1]
+
+        if price>1000:
+            return None
+
+        qty=quantity(price)
+
+        if price>last_vwap and last_ema9>last_ema21 and last_rsi<40:
+
+            target=round(price*1.01,2)
+
+            sl=round(price*0.995,2)
+
+            return f"""📈 BUY {name}
+
+Entry ₹{price}
+Target ₹{target}
+SL ₹{sl}
+Qty {qty}"""
+
+        if price<last_vwap and last_ema9<last_ema21 and last_rsi>60:
+
+            target=round(price*0.99,2)
+
+            sl=round(price*1.005,2)
+
+            return f"""📉 SELL {name}
+
+Entry ₹{price}
+Target ₹{target}
+SL ₹{sl}
+Qty {qty}"""
 
         return None
 
-    df["VWAP"]=vwap(df)
+    except Exception as e:
 
-    df["EMA9"]=df["Close"].ewm(span=9).mean()
-
-    df["EMA21"]=df["Close"].ewm(span=21).mean()
-
-    rsi=ta.momentum.RSIIndicator(df["Close"]).rsi()
-
-    price=df["Close"].iloc[-1]
-
-    last_vwap=df["VWAP"].iloc[-1]
-
-    last_ema9=df["EMA9"].iloc[-1]
-
-    last_ema21=df["EMA21"].iloc[-1]
-
-    last_rsi=rsi.iloc[-1]
-
-    qty=quantity(price)
-
-    if price>last_vwap and last_ema9>last_ema21 and last_rsi<40 and price<1000:
-
-        target=round(price*1.01,2)
-
-        sl=round(price*0.995,2)
-
-        return f"""📈 BUY {name}
-
-Entry ₹{price}
-
-Target ₹{target}
-
-SL ₹{sl}
-
-Qty {qty}"""
-
-    if price<last_vwap and last_ema9<last_ema21 and last_rsi>60 and price<1000:
-
-        target=round(price*0.99,2)
-
-        sl=round(price*1.005,2)
-
-        return f"""📉 SELL {name}
-
-Entry ₹{price}
-
-Target ₹{target}
-
-SL ₹{sl}
-
-Qty {qty}"""
-
-    return None
-
-
-def index_strategy(symbol,name):
-
-    df=yf.download(symbol,period="1d",interval="5m")
-
-    if df.empty:
+        print("Stock error:",symbol,e)
 
         return None
-
-    ema9=df["Close"].ewm(span=9).mean()
-
-    ema21=df["Close"].ewm(span=21).mean()
-
-    if ema9.iloc[-1]>ema21.iloc[-1]:
-
-        return f"🔥 BUY {name} OPTION TREND UP"
-
-    if ema9.iloc[-1]<ema21.iloc[-1]:
-
-        return f"🔻 SELL {name} OPTION TREND DOWN"
-
-    return None
 
 
 def run():
 
     if not market_open():
-
+        print("Market closed")
         return
 
     for name,symbol in stocks.items():
@@ -198,15 +176,6 @@ def run():
         signal=strategy(symbol,name)
 
         if signal:
-
-            send_telegram(signal)
-
-    for name,symbol in indices.items():
-
-        signal=index_strategy(symbol,name)
-
-        if signal:
-
             send_telegram(signal)
 
 
