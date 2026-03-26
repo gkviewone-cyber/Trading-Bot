@@ -1,145 +1,172 @@
 import yfinance as yf
+import pandas as pd
+import ta
 import requests
 from datetime import datetime
 import pytz
 
-
 BOT_TOKEN = "8677504246:AAFq6kPDoX410tz3kodv5ZQaqviiZ5JEfBc"
 CHAT_ID = "8791344518"
 
-
-MAX_PRICE = 500
-
+CAPITAL = 600
+LEVERAGE = 10   # intraday leverage estimate
 
 stocks = {
-
-"SBIN":"SBIN.NS",
-"ITC":"ITC.NS",
-"WIPRO":"WIPRO.NS",
-"NTPC":"NTPC.NS",
-"POWERGRID":"POWERGRID.NS",
-"TATAMOTORS":"TATAMOTORS.NS",
-"COALINDIA":"COALINDIA.NS",
-"IOC":"IOC.NS",
-"ONGC":"ONGC.NS",
-"PNB":"PNB.NS",
-"CANBK":"CANBK.NS",
-"IDFCFIRSTB":"IDFCFIRSTB.NS",
-"BHEL":"BHEL.NS",
-"SAIL":"SAIL.NS",
-"IRFC":"IRFC.NS",
-"NBCC":"NBCC.NS"
-
+    "SBIN": "SBIN.NS",
+    "AXISBANK": "AXISBANK.NS",
+    "ITC": "ITC.NS",
+    "WIPRO": "WIPRO.NS",
+    "POWERGRID": "POWERGRID.NS",
+    "NTPC": "NTPC.NS",
+    "TATAMOTORS": "TATAMOTORS.NS"
 }
 
-
 indices = {
-
-"NIFTY":"^NSEI",
-"BANKNIFTY":"^NSEBANK",
-"SENSEX":"^BSESN"
-
+    "NIFTY": "^NSEI",
+    "BANKNIFTY": "^NSEBANK",
+    "SENSEX": "^BSESN"
 }
 
 
 def send_telegram(message):
-
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-
-    requests.post(url, data={
-        "chat_id": CHAT_ID,
-        "text": message
-    })
+    requests.post(url, data={"chat_id": CHAT_ID, "text": message})
 
 
 def market_open():
 
     india = pytz.timezone("Asia/Kolkata")
-
     now = datetime.now(india)
 
     if now.weekday() >= 5:
         return False
 
-    start = now.replace(hour=9, minute=20, second=0)
-    end = now.replace(hour=15, minute=30, second=0)
+    if now.hour < 9:
+        return False
 
-    return start <= now <= end
+    if now.hour == 9 and now.minute < 15:
+        return False
 
+    if now.hour > 15:
+        return False
 
-def breakout_logic(symbol, name, is_index=False):
+    if now.hour == 15 and now.minute > 30:
+        return False
 
-    try:
-
-        data = yf.download(symbol, period="1d", interval="5m")
-
-        if data.empty:
-            return
-
-
-        first_20 = data.between_time("09:15","09:20")
-
-        if first_20.empty:
-            return
+    return True
 
 
-        range_high = first_20["High"].max()
-        range_low = first_20["Low"].min()
+def vwap(df):
 
-        last_price = data["Close"].iloc[-1]
+    vol = df["Volume"]
+    price = (df["High"] + df["Low"] + df["Close"]) / 3
 
-
-        if not is_index and last_price > MAX_PRICE:
-            return
+    return (price * vol).cumsum() / vol.cumsum()
 
 
-        avg_volume = data["Volume"].mean()
-        last_volume = data["Volume"].iloc[-1]
+def calculate_quantity(price):
+
+    buying_power = CAPITAL * LEVERAGE
+
+    qty = int(buying_power / price)
+
+    if qty < 1:
+        qty = 1
+
+    return qty
 
 
-        if last_price > range_high and last_volume > avg_volume:
+def check_stock_signal(name, symbol):
 
-            entry = round(last_price,2)
-            sl = round(range_low,2)
-            target = round(entry * 1.02,2)
+    df = yf.download(symbol, period="1d", interval="5m")
+
+    if df.empty:
+        return None
+
+    price = df["Close"].iloc[-1]
+
+    if price > 1000:
+        return None
+
+    df["VWAP"] = vwap(df)
+
+    rsi = ta.momentum.RSIIndicator(df["Close"]).rsi()
+
+    last_rsi = rsi.iloc[-1]
+
+    last_price = df["Close"].iloc[-1]
+
+    last_vwap = df["VWAP"].iloc[-1]
+
+    qty = calculate_quantity(last_price)
+
+    if last_price > last_vwap and last_rsi < 40:
+
+        target = round(last_price * 1.01, 2)
+        sl = round(last_price * 0.995, 2)
+
+        return f"""📈 BUY {name}
+Entry: ₹{last_price}
+Target: ₹{target}
+SL: ₹{sl}
+Qty: {qty} shares"""
 
 
-            message = f"🚨 9:20 BREAKOUT BUY\n{name}\nEntry:{entry}\nSL:{sl}\nTarget:{target}"
+    if last_price < last_vwap and last_rsi > 60:
 
-            send_telegram(message)
+        target = round(last_price * 0.99, 2)
+        sl = round(last_price * 1.005, 2)
 
+        return f"""📉 SELL {name}
+Entry: ₹{last_price}
+Target: ₹{target}
+SL: ₹{sl}
+Qty: {qty} shares"""
 
-        elif last_price < range_low and last_volume > avg_volume:
-
-            entry = round(last_price,2)
-            sl = round(range_high,2)
-            target = round(entry * 0.98,2)
-
-
-            message = f"🚨 9:20 BREAKOUT SELL\n{name}\nEntry:{entry}\nSL:{sl}\nTarget:{target}"
-
-            send_telegram(message)
+    return None
 
 
-    except:
+def check_index_signal(name, symbol):
 
-        pass
+    df = yf.download(symbol, period="1d", interval="5m")
+
+    if df.empty:
+        return None
+
+    close = df["Close"]
+
+    ema9 = close.ewm(span=9).mean()
+    ema21 = close.ewm(span=21).mean()
+
+    if ema9.iloc[-1] > ema21.iloc[-1]:
+
+        return f"🔥 BUY {name} TREND UP"
+
+    if ema9.iloc[-1] < ema21.iloc[-1]:
+
+        return f"🔻 SELL {name} TREND DOWN"
+
+    return None
 
 
-def scan_market():
+def run_bot():
 
     if not market_open():
         return
 
+    for name, symbol in stocks.items():
+
+        signal = check_stock_signal(name, symbol)
+
+        if signal:
+            send_telegram(signal)
 
     for name, symbol in indices.items():
 
-        breakout_logic(symbol, name, True)
+        signal = check_index_signal(name, symbol)
+
+        if signal:
+            send_telegram(signal)
 
 
-    for name, symbol in stocks.items():
-
-        breakout_logic(symbol, name)
-
-
-scan_market()
+run_bot()
