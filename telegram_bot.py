@@ -29,6 +29,13 @@ stocks = {
 "MARUTI":"MARUTI.NS"
 }
 
+indices = {
+
+"NIFTY":"^NSEI",
+"BANKNIFTY":"^NSEBANK",
+"SENSEX":"^BSESN"
+}
+
 
 def send_telegram(message):
 
@@ -67,13 +74,13 @@ def market_open():
     return True
 
 
-def strategy(symbol,name):
+def stock_signal(symbol,name):
 
     try:
 
         df=yf.download(symbol,period="1d",interval="5m",progress=False)
 
-        if df is None or df.empty:
+        if df.empty:
             return None
 
         close=df["Close"]
@@ -97,9 +104,37 @@ def strategy(symbol,name):
 
         return None
 
-    except Exception as e:
+    except:
 
-        print("Stock error:",symbol,e)
+        return None
+
+
+def index_signal(symbol,name):
+
+    try:
+
+        df=yf.download(symbol,period="1d",interval="5m",progress=False)
+
+        if df.empty:
+            return None
+
+        close=df["Close"]
+
+        ema9=close.ewm(span=9).mean()
+
+        ema21=close.ewm(span=21).mean()
+
+        if ema9.iloc[-1]>ema21.iloc[-1]:
+
+            return f"🔥 BUY {name} CE (Trend Up)"
+
+        if ema9.iloc[-1]<ema21.iloc[-1]:
+
+            return f"🔻 BUY {name} PE (Trend Down)"
+
+        return None
+
+    except:
 
         return None
 
@@ -108,26 +143,36 @@ def run():
 
     if not market_open():
 
-        print("Market closed")
-
         return
 
-    signals=0
+    signals_sent=0
+
 
     for name,symbol in stocks.items():
 
-        signal=strategy(symbol,name)
+        signal=stock_signal(symbol,name)
 
         if signal:
 
             send_telegram(signal)
 
-            signals+=1
+            signals_sent+=1
 
 
-    if signals==0:
+    for name,symbol in indices.items():
 
-        send_telegram("📊 Scanner running — No signals right now")
+        signal=index_signal(symbol,name)
+
+        if signal:
+
+            send_telegram(signal)
+
+            signals_sent+=1
+
+
+    if signals_sent==0:
+
+        send_telegram("📊 Scanner active — waiting breakout setup")
 
 
 run()
