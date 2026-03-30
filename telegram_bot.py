@@ -6,6 +6,7 @@ import pytz
 BOT_TOKEN = "8677504246:AAFq6kPDoX410tz3kodv5ZQaqviiZ5JEfBc"
 CHAT_ID = "8791344518"
 
+
 stocks = {
 
 "SBIN":"SBIN.NS",
@@ -18,6 +19,7 @@ stocks = {
 "IRFC":"IRFC.NS",
 "IOC":"IOC.NS",
 "YESBANK":"YESBANK.NS"
+
 }
 
 
@@ -40,7 +42,7 @@ def market_open():
     if now.hour<9:
         return False
 
-    if now.hour==9 and now.minute<20:
+    if now.hour==9 and now.minute<15:
         return False
 
     if now.hour>15:
@@ -54,40 +56,47 @@ def market_open():
 
 def strategy(symbol,name):
 
-    df=yf.download(symbol,period="1d",interval="5m",progress=False)
+    try:
 
-    if df.empty:
+        df=yf.download(symbol,period="1d",interval="5m",progress=False)
+
+        if df.empty:
+            return None
+
+        close=df["Close"]
+
+        ema9=close.ewm(span=9).mean()
+
+        ema21=close.ewm(span=21).mean()
+
+        price=close.iloc[-1]
+
+        if ema9.iloc[-1]>ema21.iloc[-1]:
+
+            return f"📈 BUY {name} @ ₹{round(price,2)}"
+
+        if ema9.iloc[-1]<ema21.iloc[-1]:
+
+            return f"📉 SELL {name} @ ₹{round(price,2)}"
+
         return None
 
-    close=df["Close"]
+    except Exception as e:
 
-    ema9=close.ewm(span=9).mean()
-
-    ema21=close.ewm(span=21).mean()
-
-    price=close.iloc[-1]
-
-    if price>1000:
         return None
-
-    if ema9.iloc[-1]>ema21.iloc[-1]:
-
-        return f"📈 BUY {name} @ ₹{round(price,2)}"
-
-    if ema9.iloc[-1]<ema21.iloc[-1]:
-
-        return f"📉 SELL {name} @ ₹{round(price,2)}"
-
-    return None
 
 
 def run():
 
     if not market_open():
 
+        send_telegram("⏰ Market closed — bot standby mode")
+
         return
 
+
     signals=0
+
 
     for name,symbol in stocks.items():
 
