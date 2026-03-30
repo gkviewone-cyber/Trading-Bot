@@ -1,13 +1,12 @@
-name: Telegram Trading Bot
+name: Run Telegram Trading Bot
 
 on:
   schedule:
-    - cron: "*/5 4-10 * * 1-5"
+    - cron: "50 3-10 * * 1-5"
   workflow_dispatch:
 
 jobs:
   run-bot:
-
     runs-on: ubuntu-latest
 
     env:
@@ -25,8 +24,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install yfinance pandas ta requests pytz
+        pip install yfinance pandas requests pytz
 
     - name: Run bot
       run: python telegram_bot.py
