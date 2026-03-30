@@ -1,6 +1,4 @@
 import yfinance as yf
-import pandas as pd
-import ta
 import requests
 from datetime import datetime
 import pytz
@@ -8,140 +6,103 @@ import pytz
 BOT_TOKEN = "8677504246:AAFq6kPDoX410tz3kodv5ZQaqviiZ5JEfBc"
 CHAT_ID = "8791344518"
 
-CAPITAL = 1400
-LEVERAGE = 10
-
 stocks = {
-    "SBIN": "SBIN.NS",
-    "AXISBANK": "AXISBANK.NS",
-    "ITC": "ITC.NS",
-    "WIPRO": "WIPRO.NS",
-    "POWERGRID": "POWERGRID.NS",
-    "NTPC": "NTPC.NS",
-    "TATAMOTORS": "TATAMOTORS.NS",
-    "HDFCBANK": "HDFCBANK.NS",
-    "IOC": "IOC.NS",
-    "IRFC": "IRFC.NS",
-    "YESBANK": "YESBANK.NS"
+
+"SBIN":"SBIN.NS",
+"AXISBANK":"AXISBANK.NS",
+"ITC":"ITC.NS",
+"WIPRO":"WIPRO.NS",
+"POWERGRID":"POWERGRID.NS",
+"NTPC":"NTPC.NS",
+"TATAMOTORS":"TATAMOTORS.NS",
+"IRFC":"IRFC.NS",
+"IOC":"IOC.NS",
+"YESBANK":"YESBANK.NS"
 }
 
 
 def send_telegram(msg):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+
+    url=f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+
+    requests.post(url,data={"chat_id":CHAT_ID,"text":msg})
 
 
 def market_open():
 
-    india = pytz.timezone("Asia/Kolkata")
-    now = datetime.now(india)
+    india=pytz.timezone("Asia/Kolkata")
 
-    if now.weekday() >= 5:
+    now=datetime.now(india)
+
+    if now.weekday()>=5:
         return False
 
-    if now.hour < 9:
+    if now.hour<9:
         return False
 
-    if now.hour == 9 and now.minute < 15:
+    if now.hour==9 and now.minute<20:
         return False
 
-    if now.hour > 15:
+    if now.hour>15:
         return False
 
-    if now.hour == 15 and now.minute > 30:
+    if now.hour==15 and now.minute>30:
         return False
 
     return True
 
 
-def vwap(df):
+def strategy(symbol,name):
 
-    price = (df["High"] + df["Low"] + df["Close"]) / 3
-    vol = df["Volume"]
-
-    return (price * vol).cumsum() / vol.cumsum()
-
-
-def quantity(price):
-
-    buying_power = CAPITAL * LEVERAGE
-    qty = int(buying_power / price)
-
-    if qty < 1:
-        qty = 1
-
-    return qty
-
-
-def check_signal(name, symbol):
-
-    df = yf.download(symbol, period="1d", interval="5m")
+    df=yf.download(symbol,period="1d",interval="5m",progress=False)
 
     if df.empty:
         return None
 
-    df["VWAP"] = vwap(df)
+    close=df["Close"]
 
-    df["EMA9"] = df["Close"].ewm(span=9).mean()
-    df["EMA21"] = df["Close"].ewm(span=21).mean()
+    ema9=close.ewm(span=9).mean()
 
-    rsi = ta.momentum.RSIIndicator(df["Close"]).rsi()
+    ema21=close.ewm(span=21).mean()
 
-    last_price = df["Close"].iloc[-1]
-    last_vwap = df["VWAP"].iloc[-1]
-    last_ema9 = df["EMA9"].iloc[-1]
-    last_ema21 = df["EMA21"].iloc[-1]
-    last_rsi = rsi.iloc[-1]
+    price=close.iloc[-1]
 
-    qty = quantity(last_price)
+    if price>1000:
+        return None
 
-    if last_price > last_vwap and last_ema9 > last_ema21 and last_rsi > 50:
+    if ema9.iloc[-1]>ema21.iloc[-1]:
 
-        target = round(last_price * 1.01, 2)
-        sl = round(last_price * 0.995, 2)
+        return f"📈 BUY {name} @ ₹{round(price,2)}"
 
-        return f"""🚀 BUY {name}
-Entry ₹{last_price}
-Target ₹{target}
-SL ₹{sl}
-Qty {qty}"""
+    if ema9.iloc[-1]<ema21.iloc[-1]:
 
-    if last_price < last_vwap and last_ema9 < last_ema21 and last_rsi < 50:
-
-        target = round(last_price * 0.99, 2)
-        sl = round(last_price * 1.005, 2)
-
-        return f"""📉 SELL {name}
-Entry ₹{last_price}
-Target ₹{target}
-SL ₹{sl}
-Qty {qty}"""
+        return f"📉 SELL {name} @ ₹{round(price,2)}"
 
     return None
 
 
-def run_bot():
+def run():
 
     if not market_open():
+
         return
 
-    signals = []
+    signals=0
 
-    for name, symbol in stocks.items():
+    for name,symbol in stocks.items():
 
-        signal = check_signal(name, symbol)
+        signal=strategy(symbol,name)
 
         if signal:
-            signals.append(signal)
 
-    if signals:
+            send_telegram(signal)
 
-        for s in signals:
-            send_telegram(s)
+            signals+=1
 
-    else:
+
+    if signals==0:
 
         send_telegram("📊 Scanner active — waiting breakout setup")
 
 
-run_bot()
+run()
