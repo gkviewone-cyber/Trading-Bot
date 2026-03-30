@@ -1,4 +1,6 @@
 import yfinance as yf
+import pandas as pd
+import ta
 import requests
 from datetime import datetime
 import pytz
@@ -6,173 +8,140 @@ import pytz
 BOT_TOKEN = "8677504246:AAFq6kPDoX410tz3kodv5ZQaqviiZ5JEfBc"
 CHAT_ID = "8791344518"
 
+CAPITAL = 1400
+LEVERAGE = 10
+
 stocks = {
-
-"SBIN":"SBIN.NS",
-"AXISBANK":"AXISBANK.NS",
-"ITC":"ITC.NS",
-"WIPRO":"WIPRO.NS",
-"POWERGRID":"POWERGRID.NS",
-"NTPC":"NTPC.NS",
-"TATAMOTORS":"TATAMOTORS.NS",
-"RELIANCE":"RELIANCE.NS",
-"HDFCBANK":"HDFCBANK.NS",
-"ICICIBANK":"ICICIBANK.NS",
-"INFY":"INFY.NS",
-"LT":"LT.NS",
-"KOTAKBANK":"KOTAKBANK.NS",
-"BHARTIARTL":"BHARTIARTL.NS",
-"ADANIENT":"ADANIENT.NS",
-"HINDUNILVR":"HINDUNILVR.NS",
-"ULTRACEMCO":"ULTRACEMCO.NS",
-"BAJFINANCE":"BAJFINANCE.NS",
-"MARUTI":"MARUTI.NS"
-}
-
-indices = {
-
-"NIFTY":"^NSEI",
-"BANKNIFTY":"^NSEBANK",
-"SENSEX":"^BSESN"
+    "SBIN": "SBIN.NS",
+    "AXISBANK": "AXISBANK.NS",
+    "ITC": "ITC.NS",
+    "WIPRO": "WIPRO.NS",
+    "POWERGRID": "POWERGRID.NS",
+    "NTPC": "NTPC.NS",
+    "TATAMOTORS": "TATAMOTORS.NS",
+    "HDFCBANK": "HDFCBANK.NS",
+    "IOC": "IOC.NS",
+    "IRFC": "IRFC.NS",
+    "YESBANK": "YESBANK.NS"
 }
 
 
-def send_telegram(message):
-
-    try:
-
-        url=f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-
-        requests.post(url,data={"chat_id":CHAT_ID,"text":message})
-
-    except Exception as e:
-
-        print("Telegram error:",e)
+def send_telegram(msg):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
 
 
 def market_open():
 
-    india=pytz.timezone("Asia/Kolkata")
+    india = pytz.timezone("Asia/Kolkata")
+    now = datetime.now(india)
 
-    now=datetime.now(india)
-
-    if now.weekday()>=5:
+    if now.weekday() >= 5:
         return False
 
-    if now.hour<9:
+    if now.hour < 9:
         return False
 
-    if now.hour==9 and now.minute<20:
+    if now.hour == 9 and now.minute < 15:
         return False
 
-    if now.hour>15:
+    if now.hour > 15:
         return False
 
-    if now.hour==15 and now.minute>30:
+    if now.hour == 15 and now.minute > 30:
         return False
 
     return True
 
 
-def stock_signal(symbol,name):
+def vwap(df):
 
-    try:
+    price = (df["High"] + df["Low"] + df["Close"]) / 3
+    vol = df["Volume"]
 
-        df=yf.download(symbol,period="1d",interval="5m",progress=False)
+    return (price * vol).cumsum() / vol.cumsum()
 
-        if df.empty:
-            return None
 
-        close=df["Close"]
+def quantity(price):
 
-        ema9=close.ewm(span=9).mean()
+    buying_power = CAPITAL * LEVERAGE
+    qty = int(buying_power / price)
 
-        ema21=close.ewm(span=21).mean()
+    if qty < 1:
+        qty = 1
 
-        price=close.iloc[-1]
+    return qty
 
-        if price>1000:
-            return None
 
-        if ema9.iloc[-1]>ema21.iloc[-1]:
+def check_signal(name, symbol):
 
-            return f"📈 BUY {name} @ ₹{round(price,2)}"
+    df = yf.download(symbol, period="1d", interval="5m")
 
-        if ema9.iloc[-1]<ema21.iloc[-1]:
-
-            return f"📉 SELL {name} @ ₹{round(price,2)}"
-
+    if df.empty:
         return None
 
-    except:
+    df["VWAP"] = vwap(df)
 
-        return None
+    df["EMA9"] = df["Close"].ewm(span=9).mean()
+    df["EMA21"] = df["Close"].ewm(span=21).mean()
+
+    rsi = ta.momentum.RSIIndicator(df["Close"]).rsi()
+
+    last_price = df["Close"].iloc[-1]
+    last_vwap = df["VWAP"].iloc[-1]
+    last_ema9 = df["EMA9"].iloc[-1]
+    last_ema21 = df["EMA21"].iloc[-1]
+    last_rsi = rsi.iloc[-1]
+
+    qty = quantity(last_price)
+
+    if last_price > last_vwap and last_ema9 > last_ema21 and last_rsi > 50:
+
+        target = round(last_price * 1.01, 2)
+        sl = round(last_price * 0.995, 2)
+
+        return f"""🚀 BUY {name}
+Entry ₹{last_price}
+Target ₹{target}
+SL ₹{sl}
+Qty {qty}"""
+
+    if last_price < last_vwap and last_ema9 < last_ema21 and last_rsi < 50:
+
+        target = round(last_price * 0.99, 2)
+        sl = round(last_price * 1.005, 2)
+
+        return f"""📉 SELL {name}
+Entry ₹{last_price}
+Target ₹{target}
+SL ₹{sl}
+Qty {qty}"""
+
+    return None
 
 
-def index_signal(symbol,name):
-
-    try:
-
-        df=yf.download(symbol,period="1d",interval="5m",progress=False)
-
-        if df.empty:
-            return None
-
-        close=df["Close"]
-
-        ema9=close.ewm(span=9).mean()
-
-        ema21=close.ewm(span=21).mean()
-
-        if ema9.iloc[-1]>ema21.iloc[-1]:
-
-            return f"🔥 BUY {name} CE (Trend Up)"
-
-        if ema9.iloc[-1]<ema21.iloc[-1]:
-
-            return f"🔻 BUY {name} PE (Trend Down)"
-
-        return None
-
-    except:
-
-        return None
-
-
-def run():
+def run_bot():
 
     if not market_open():
-
         return
 
-    signals_sent=0
+    signals = []
 
+    for name, symbol in stocks.items():
 
-    for name,symbol in stocks.items():
-
-        signal=stock_signal(symbol,name)
-
-        if signal:
-
-            send_telegram(signal)
-
-            signals_sent+=1
-
-
-    for name,symbol in indices.items():
-
-        signal=index_signal(symbol,name)
+        signal = check_signal(name, symbol)
 
         if signal:
+            signals.append(signal)
 
-            send_telegram(signal)
+    if signals:
 
-            signals_sent+=1
+        for s in signals:
+            send_telegram(s)
 
-
-    if signals_sent==0:
+    else:
 
         send_telegram("📊 Scanner active — waiting breakout setup")
 
 
-run()
+run_bot()
