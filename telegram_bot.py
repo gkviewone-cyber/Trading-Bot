@@ -2,12 +2,13 @@ import os
 import pyotp
 import requests
 import datetime
+import pytz
 import pandas as pd
 from NorenRestApiPy.NorenApi import NorenApi
 
 # --- CONFIGURATION ---
-TELEGRAM_BOT_TOKEN = os.getenv('8677504246:AAFq6kPDoX410tz3kodv5ZQaqviiZ5JEfBc') # Add this to GitHub Secrets!
-TELEGRAM_CHAT_ID = os.getenv('8791344518')     # Add this to GitHub Secrets!
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 # Stocks under ₹250 for ₹1000 Budget (Format: "Symbol": "Token")
 MY_STOCKS = {
@@ -33,11 +34,11 @@ def shoonya_login():
     api = ShoonyaApiPy()
     totp = pyotp.TOTP(os.getenv('SHOONYA_TOTP')).now()
     ret = api.login(
-        userid=os.getenv('FN201252'), 
-        password=os.getenv('Nikitha@143'), 
+        userid=os.getenv('SHOONYA_USER'), 
+        password=os.getenv('SHOONYA_PWD'), 
         twoFA=totp, 
-        vendor_code=os.getenv('FN201252_U'), 
-        api_secret=os.getenv('f35144bf80dc93c952e3ee6d6e1fcce2'), 
+        vendor_code=os.getenv('SHOONYA_VC'), 
+        api_secret=os.getenv('SHOONYA_APIKEY'), 
         imei='gh_actions_bot'
     )
     if ret and ret.get('stat') == 'Ok':
@@ -46,7 +47,6 @@ def shoonya_login():
 
 def check_orb_breakout(api, symbol_name, token):
     try:
-        # Fetch data for today
         end_time = datetime.datetime.now().timestamp()
         start_time = end_time - (6 * 60 * 60) # Last 6 hours
         
@@ -56,24 +56,24 @@ def check_orb_breakout(api, symbol_name, token):
             return None
             
         df = pd.DataFrame(ret)
-        df = df.iloc[::-1].reset_index(drop=True) # Reverse to chronological
+        df = df.iloc[::-1].reset_index(drop=True) 
         
         df['inth'] = pd.to_numeric(df['inth']) # High
         df['intl'] = pd.to_numeric(df['intl']) # Low
         df['intc'] = pd.to_numeric(df['intc']) # Close
         df['intv'] = pd.to_numeric(df['intv']) # Volume
         
-        if len(df) < 4: # Need at least first 15 mins (3 candles) + 1 new candle to break out
+        if len(df) < 4:
             return None
 
-        # Calculate 15-minute Opening Range (first 3 candles of the day)
+        # 15-minute Opening Range
         first_15_mins = df.iloc[:3]
         orb_high = first_15_mins['inth'].max()
         orb_low = first_15_mins['intl'].min()
 
         latest_candle = df.iloc[-1]
         price = latest_candle['intc']
-        avg_volume = df['intv'].tail(10).mean() # Simple volume average
+        avg_volume = df['intv'].tail(10).mean()
 
         signal = None
         
@@ -81,7 +81,7 @@ def check_orb_breakout(api, symbol_name, token):
         if price > orb_high and latest_candle['intv'] > avg_volume:
             sl = orb_low
             risk = price - sl
-            target = price + (risk * 2) # 1:2 Risk/Reward
+            target = price + (risk * 2)
             signal = f"🚀 *BULLISH BREAKOUT* \n**Stock:** {symbol_name}\n**Entry:** ₹{price:.2f}\n**Stop Loss:** ₹{sl:.2f}\n**Target:** ₹{target:.2f}"
             
         # Bearish Breakout
@@ -99,13 +99,27 @@ def check_orb_breakout(api, symbol_name, token):
 
 def main():
     print("Initiating Market Scanner...")
+    
+    tz = pytz.timezone('Asia/Kolkata')
+    now = datetime.datetime.now(tz)
+    
+    # Run hours: 8:30 AM to 4:00 PM IST
+    market_open = now.replace(hour=8, minute=30, second=0, microsecond=0)
+    market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+    
+    if now.weekday() > 4 or not (market_open <= now <= market_close):
+        print("Market closed — bot standby mode")
+        return
+
     api = shoonya_login()
     
     if not api:
-        print("Login failed. Exiting.")
+        print("Login failed. Check GitHub Secrets.")
         return
 
+    print("✅ Login Successful! Scanning stocks...")
     signals_found = 0
+    
     for symbol, token in MY_STOCKS.items():
         signal = check_orb_breakout(api, symbol, token)
         if signal:
