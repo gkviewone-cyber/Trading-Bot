@@ -23,7 +23,7 @@ jobs:
 
       - name: Install libraries
         run: |
-          pip install NorenRestApiPy pyotp pandas requests pytz
+          pip install NorenRestApiPy pyotp pandas requests pytz websocket-client
 
       - name: Run bot
         env:
