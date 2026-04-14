@@ -1,0 +1,7 @@
+pyTelegramBotAPI
+NorenRestApiPy
+pyotp
+pandas
+pytz
+websocket-client
+Flask
