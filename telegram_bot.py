@@ -30,7 +30,13 @@ MY_STOCKS = {
     "TATASTEEL": "3499",
     "ZOMATO": "76126",
     "ONGC": "2475",
-    "IDFCFIRSTB": "11184"
+    "IDFCFIRSTB": "11184",
+    "RELIANCE": "2885",      # Added
+    "SBIN": "3045",          # Added
+    "HDFCBANK": "1333",      # Added
+    "TATAMOTORS": "3456",    # Added
+    "ITC": "1660",           # Added
+    "BHARTIARTL": "10604"    # Added
 }
 
 api_session = None
