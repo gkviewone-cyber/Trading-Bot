@@ -19,9 +19,10 @@ def home():
 
 def run_server():
     port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
+    # use_reloader=False prevents Flask from secretly starting a second bot clone
+    app.run(host='0.0.0.0', port=port, use_reloader=False)
 
-# --- 2. BOT CONFIGURATION (Pulls automatically from your Secrets!) ---
+# --- 2. BOT CONFIGURATION ---
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
@@ -41,7 +42,6 @@ class ShoonyaApiPy(NorenApi):
 
 def shoonya_login():
     api = ShoonyaApiPy()
-    # Pulls your Shoonya TOTP and Passwords safely from Secrets
     totp = pyotp.TOTP(os.getenv('SHOONYA_TOTP')).now()
     ret = api.login(
         userid=os.getenv('SHOONYA_USER'), 
@@ -165,7 +165,7 @@ def background_scanner():
                     signal = check_orb_breakout(api_session, symbol, token)
                     if signal: send_interactive_alert(symbol, 0, signal)
             
-        time.sleep(300) # Wait 5 mins before checking again
+        time.sleep(300)
 
 if __name__ == "__main__":
     # 1. Start Web Server
@@ -178,6 +178,16 @@ if __name__ == "__main__":
     scanner_thread.daemon = True
     scanner_thread.start()
     
-    # 3. Start Telegram Listener
+    # 3. Start Telegram Listener Safely
+    print("Clearing old connections and starting bot...")
+    try:
+        # This forces Telegram to drop any old "Ghost" connections from previous deploys
+        bot.remove_webhook() 
+        time.sleep(2) 
+    except Exception as e:
+        pass
+        
     print("Bot is online, server is running, and listening for commands...")
-    bot.infinity_polling()
+    
+    # skip_pending=True ignores old messages so it doesn't get stuck in a loop
+    bot.infinity_polling(skip_pending=True)
