@@ -27,16 +27,14 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
 MY_STOCKS = {
-    "TATASTEEL": "3499",
-    "ZOMATO": "76126",
-    "ONGC": "2475",
-    "IDFCFIRSTB": "11184",
-    "RELIANCE": "2885",      # Added
-    "SBIN": "3045",          # Added
-    "HDFCBANK": "1333",      # Added
-    "TATAMOTORS": "3456",    # Added
-    "ITC": "1660",           # Added
-    "BHARTIARTL": "10604"    # Added
+    # --- The Budget-Friendly Movers (Price under ₹1000) ---
+    "TATASTEEL": "3499",     # ~₹160 (Needs ~₹320 margin)
+    "ZOMATO": "76126",       # ~₹160 (Needs ~₹320 margin)
+    "ONGC": "2475",          # ~₹270 (Needs ~₹540 margin)
+    "IDFCFIRSTB": "11184",   # ~₹80  (Needs ~₹160 margin)
+    "ITC": "1660",           # ~₹430 (Needs ~₹860 margin)
+    "HINDALCO": "1363",      # ~₹610 (Needs ~₹1220 margin)
+    "SBIN": "3045"           # ~₹760 (Needs ~₹1520 margin)
 }
 
 api_session = None
