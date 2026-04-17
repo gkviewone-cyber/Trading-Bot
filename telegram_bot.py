@@ -129,14 +129,20 @@ def check_orb_breakout(api, symbol_name, token):
 def background_scanner():
     global api_session
     while True:
-        tz = pytz.timezone('Asia/Kolkata')
-        now = datetime.datetime.now(tz)
-        if now.weekday() <= 4 and (8 <= now.hour <= 16):
-            if not api_session: api_session = shoonya_login()
-            if api_session:
-                for symbol, token in MY_STOCKS.items():
-                    signal = check_orb_breakout(api_session, symbol, token)
-                    if signal: send_interactive_alert(symbol, signal)
+        try:
+            tz = pytz.timezone('Asia/Kolkata')
+            now = datetime.datetime.now(tz)
+            if now.weekday() <= 4 and (8 <= now.hour <= 16):
+                if not api_session: 
+                    api_session = shoonya_login()
+                if api_session:
+                    for symbol, token in MY_STOCKS.items():
+                        signal = check_orb_breakout(api_session, symbol, token)
+                        if signal: send_interactive_alert(symbol, signal)
+        except Exception as e:
+            print(f"⚠️ Scanner Hiccup (Shoonya Error): {e}")
+            api_session = None # Force a fresh login on the next loop
+            
         time.sleep(300)
 
 if __name__ == "__main__":
