@@ -65,7 +65,6 @@ def shoonya_login():
 
 # --- 3. TELEGRAM HANDLERS ---
 
-# THIS IS THE PART THAT REPLIES TO /START
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     bot.reply_to(message, "🚀 Bot is active and monitoring the market!")
@@ -117,11 +116,16 @@ def check_orb_breakout(api, symbol_name, token):
         if not ret or not isinstance(ret, list) or len(ret) < 4: return None
         df = pd.DataFrame(ret).iloc[::-1].reset_index(drop=True) 
         df[['inth', 'intl', 'intc', 'intv']] = df[['inth', 'intl', 'intc', 'intv']].apply(pd.to_numeric)
+        
         orb_high = df.iloc[:3]['inth'].max()
         latest_candle = df.iloc[-1]
         price = latest_candle['intc']
-        avg_volume = df['intv'].tail(10).mean()
-        if price > orb_high and latest_candle['intv'] > avg_volume:
+        
+        # --- X-RAY LOGGING ADDED HERE ---
+        print(f"👀 [{symbol_name}] Live Price: ₹{price:.2f} | Ceiling to Break: ₹{orb_high:.2f}")
+
+        # --- VOLUME TRAP REMOVED HERE ---
+        if price > orb_high:
             return f"🚀 *BULLISH BREAKOUT* \n**Stock:** {symbol_name}\n**Price:** ₹{price:.2f}"
         return None
     except: return None
