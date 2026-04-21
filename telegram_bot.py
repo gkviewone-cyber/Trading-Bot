@@ -61,7 +61,9 @@ def shoonya_login():
     if ret and ret.get('stat') == 'Ok':
         print("✅ Shoonya Login Successful!")
         return api
-    return None
+    else:
+        print(f"❌ Shoonya Login Failed: {ret}")
+        return None
 
 # --- 3. TELEGRAM HANDLERS ---
 
