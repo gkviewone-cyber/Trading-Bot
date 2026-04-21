@@ -112,25 +112,27 @@ def send_interactive_alert(symbol, text):
 
 def check_orb_breakout(api, symbol_name, token):
     try:
-        end_time = datetime.datetime.now().timestamp()
-        start_time = end_time - (6 * 60 * 60)
-        ret = api.get_time_price_series(exchange='NSE', token=token, starttime=start_time, endtime=end_time, interval=5)
-        if not ret or not isinstance(ret, list) or len(ret) < 4: return None
-        df = pd.DataFrame(ret).iloc[::-1].reset_index(drop=True) 
-        df[['inth', 'intl', 'intc', 'intv']] = df[['inth', 'intl', 'intc', 'intv']].apply(pd.to_numeric)
+        # --- EMERGENCY BYPASS: Using Live Quotes instead of Charts ---
+        quote = api.get_quotes(exchange='NSE', token=token)
         
-        orb_high = df.iloc[:3]['inth'].max()
-        latest_candle = df.iloc[-1]
-        price = latest_candle['intc']
-        
-        # --- X-RAY LOGGING ADDED HERE ---
-        print(f"👀 [{symbol_name}] Live Price: ₹{price:.2f} | Ceiling to Break: ₹{orb_high:.2f}")
+        # If Shoonya doesn't send the quote properly, just skip quietly
+        if not quote or quote.get('stat') != 'Ok': 
+            return None
 
-        # --- VOLUME TRAP REMOVED HERE ---
-        if price > orb_high:
-            return f"🚀 *BULLISH BREAKOUT* \n**Stock:** {symbol_name}\n**Price:** ₹{price:.2f}"
+        price = float(quote['lp'])       # Last Traded Price
+        day_high = float(quote['h'])     # Current Day's High
+        
+        # --- X-RAY LOGGING ---
+        print(f"👀 [{symbol_name}] Live Price: ₹{price:.2f} | Day High: ₹{day_high:.2f}")
+
+        # Breakout Trigger: If the live price is pushing the day's high
+        if price >= day_high and price > 0:
+            return f"🚀 *BULLISH BREAKOUT (LIVE BYPASS)* \n**Stock:** {symbol_name}\n**Price:** ₹{price:.2f}"
+        
         return None
-    except: return None
+    except Exception as e:
+        print(f"⚠️ Bypass Error [{symbol_name}]: {e}")
+        return None
 
 def background_scanner():
     global api_session
