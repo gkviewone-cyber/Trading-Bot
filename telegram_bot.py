@@ -21,6 +21,16 @@ app = Flask(__name__)
 def home():
     return "Bot is awake, hunting for breakouts! 🚀"
 
+@app.route('/test-shoonya')
+def test_shoonya():
+    """Debug route — visit this to check if Shoonya is reachable from Render."""
+    import requests
+    try:
+        r = requests.get('https://api.shoonya.com/NorenWClientTP/', timeout=10)
+        return f"✅ Shoonya reachable | Status: {r.status_code} | Body: {r.text[:200]}"
+    except Exception as e:
+        return f"❌ Shoonya unreachable: {e}"
+
 def run_server():
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port, use_reloader=False)
@@ -46,12 +56,13 @@ MY_STOCKS = {
 
 # Global state
 api_session       = None
-_login_lock       = threading.Lock()   # Prevents double-login from two threads
+_login_lock       = threading.Lock()
 _login_fail_count = 0
+_last_login_time  = 0   # Timestamp of last login attempt
 
 
 # ============================================================
-# 3. SHOONYA LOGIN
+# 3. SHOONYA LOGIN  (with rate-limit backoff)
 # ============================================================
 
 class ShoonyaApiPy(NorenApi):
@@ -65,18 +76,27 @@ class ShoonyaApiPy(NorenApi):
 
 def shoonya_login():
     """
-    Login to Shoonya. Uses a threading lock so only ONE thread
-    can login at a time — fixes the double-login bug.
+    Login to Shoonya with threading lock (prevents double-login)
+    and rate-limit backoff (min 60s between attempts).
     """
-    with _login_lock:
-        global api_session
+    global api_session, _last_login_time
 
-        # If another thread already logged in while we were waiting, reuse it
+    with _login_lock:
+        # Reuse existing session if already logged in
         if api_session:
             return api_session
 
+        # Rate limit: never attempt login more than once per 60 seconds
+        elapsed = time.time() - _last_login_time
+        if elapsed < 60:
+            wait = int(60 - elapsed)
+            print(f"⏳ Rate limit: waiting {wait}s before next login attempt...")
+            time.sleep(wait)
+
         try:
-            time.sleep(2)  # Small pause to avoid rate limiting
+            _last_login_time = time.time()
+            time.sleep(2)
+
             api = ShoonyaApiPy()
 
             totp_secret = os.getenv('SHOONYA_TOTP')
@@ -114,7 +134,7 @@ def scheduled_daily_login():
     """Force a fresh login every morning before market opens."""
     global api_session, _login_fail_count
     print("🌅 Daily re-login at 08:50 IST...")
-    api_session       = None  # Clear old session first
+    api_session       = None
     _login_fail_count = 0
     result = shoonya_login()
     try:
@@ -196,8 +216,8 @@ def handle_trade_execution(call):
             return
 
         try:
-            token = MY_STOCKS[symbol]
-            quote = api_session.get_quotes(exchange='NSE', token=token)
+            token      = MY_STOCKS[symbol]
+            quote      = api_session.get_quotes(exchange='NSE', token=token)
 
             if not quote or isinstance(quote, str) or quote.get('stat') != 'Ok':
                 bot.send_message(call.message.chat.id, f"❌ Could not fetch live price for {symbol}.")
@@ -208,9 +228,9 @@ def handle_trade_execution(call):
                 bot.send_message(call.message.chat.id, f"❌ Invalid price ₹{live_price} for {symbol}")
                 return
 
-            stop_loss_points   = round(live_price * 0.01,  1)
-            target_points      = round(live_price * 0.05,  1)
-            trail_jump_points  = max(round(live_price * 0.005, 1), 0.05)
+            stop_loss_points  = round(live_price * 0.01,  1)
+            target_points     = round(live_price * 0.05,  1)
+            trail_jump_points = max(round(live_price * 0.005, 1), 0.05)
 
             order = api_session.place_order(
                 buy_or_sell      = 'B',
@@ -329,12 +349,13 @@ def send_interactive_alert(symbol, text):
 
 def background_scanner():
     """
-    Scanner loop. Waits 10s on startup so __main__ login finishes first.
-    Never calls login directly — reuses api_session set by __main__.
+    Scanner loop. Waits 15s on startup so __main__ login finishes first.
+    Uses exponential backoff on login failures to avoid rate limiting.
     """
     global api_session, _login_fail_count
 
-    time.sleep(10)  # Let __main__ finish its login first
+    # Wait for __main__ to finish its login attempt first
+    time.sleep(15)
 
     while True:
         try:
@@ -347,19 +368,23 @@ def background_scanner():
                 time.sleep(60)
                 continue
 
-            # Session missing during market hours — try to login
+            # Session missing during market hours — try login with backoff
             if not api_session:
                 if _login_fail_count >= 3:
-                    print("❌ Too many login failures. Cooling down 10 min...")
-                    time.sleep(600)
+                    # Exponential backoff: 5 min, 10 min, 15 min...
+                    wait_min = min(5 * _login_fail_count, 30)
+                    print(f"❌ {_login_fail_count} failures. Cooling down {wait_min} min...")
+                    time.sleep(wait_min * 60)
                     _login_fail_count = 0
                     continue
 
-                print(f"🔄 No session — login attempt {_login_fail_count + 1}/3...")
+                print(f"🔄 No session — login attempt {_login_fail_count + 1}...")
                 result = shoonya_login()
                 if not result:
                     _login_fail_count += 1
-                    time.sleep(60)
+                    backoff = 60 * (2 ** _login_fail_count)  # 120s, 240s, 480s
+                    print(f"⏳ Backing off {backoff}s before next attempt...")
+                    time.sleep(backoff)
                     continue
                 else:
                     _login_fail_count = 0
@@ -370,33 +395,36 @@ def background_scanner():
                 signal = check_orb_breakout(api_session, symbol, token)
                 if signal:
                     send_interactive_alert(symbol, signal)
-                time.sleep(0.5)  # Avoid hammering Shoonya
+                time.sleep(0.5)
 
         except Exception as e:
             err = str(e).lower()
             print(f"⚠️ Scanner error: {e}")
-            # Only clear session for auth errors, not random hiccups
             if any(w in err for w in ['session', 'login', 'token', 'unauthorized', 'expired']):
                 print("🔄 Auth error — will re-login next cycle")
                 api_session = None
 
-        time.sleep(300)  # Scan every 5 minutes
+        time.sleep(300)
 
 
 # ============================================================
-# 6. MAIN — startup order is critical
+# 6. MAIN — startup sequence
 # ============================================================
 
 if __name__ == "__main__":
 
-    # STEP 1: Clear ghost Telegram sessions FIRST
-    # This fixes the 409 Conflict error from previous crashed instances
+    # STEP 1: Kill ghost Telegram sessions from previous crashed instances
+    # Retry up to 5 times with increasing delay until Telegram releases the old session
     print("🧹 Clearing old Telegram sessions...")
-    try:
-        bot.delete_webhook(drop_pending_updates=True)
-        time.sleep(5)  # Give Telegram time to fully release old session
-    except Exception as e:
-        print(f"⚠️ Webhook clear warning: {e}")
+    for attempt in range(5):
+        try:
+            bot.delete_webhook(drop_pending_updates=True)
+            print(f"✅ Webhook cleared (attempt {attempt + 1})")
+            time.sleep(8)  # Give Telegram time to release old long-poll connection
+            break
+        except Exception as e:
+            print(f"⚠️ Webhook clear attempt {attempt + 1} failed: {e}")
+            time.sleep(5)
 
     # STEP 2: Schedule daily re-login at 8:50 AM IST
     schedule.every().day.at("08:50").do(scheduled_daily_login)
@@ -405,7 +433,7 @@ if __name__ == "__main__":
     threading.Thread(target=run_server, daemon=True).start()
     print("✅ Web server started.")
 
-    # STEP 4: Login to Shoonya ONCE — scanner will reuse this session
+    # STEP 4: Login to Shoonya ONCE — scanner thread will reuse this session
     print("🔄 Initial Shoonya login...")
     result = shoonya_login()
     if result:
@@ -423,15 +451,30 @@ if __name__ == "__main__":
     else:
         print("⚠️ Initial login failed. Will retry during market hours.")
 
-    # STEP 5: Start scanner thread AFTER login
+    # STEP 5: Start scanner thread AFTER login attempt
     threading.Thread(target=background_scanner, daemon=True).start()
     print("✅ Background scanner started.")
 
-    # STEP 6: Start Telegram polling — this is blocking, must be LAST
+    # STEP 6: Start Telegram polling with 409 auto-recovery loop
+    # This is blocking — must be last
     print("✅ Bot polling started!")
-    bot.infinity_polling(
-        skip_pending=True,
-        timeout=60,
-        long_polling_timeout=60,
-        interval=1
-    )
+    while True:
+        try:
+            bot.infinity_polling(
+                skip_pending=True,
+                timeout=60,
+                long_polling_timeout=60,
+                interval=1
+            )
+        except telebot.apihelper.ApiTelegramException as e:
+            if '409' in str(e):
+                # Another instance still running — wait for it to die
+                print("⚠️ 409 Conflict — old instance still alive. Waiting 30s...")
+                time.sleep(30)
+                print("🔄 Retrying polling...")
+            else:
+                print(f"⚠️ Telegram API error: {e}")
+                time.sleep(10)
+        except Exception as e:
+            print(f"⚠️ Polling crashed: {e}")
+            time.sleep(10)
