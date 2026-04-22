@@ -1,37 +1,4 @@
 name: Run Telegram Trading Bot
-
 on:
-  schedule:
-    # Runs every 5 mins from 8:30 AM to 3:25 PM IST
-    - cron: "*/5 3-9 * * 1-5"
-    # Runs every 5 mins from 3:30 PM to 4:00 PM IST
-    - cron: "0-30/5 10 * * 1-5"
-  workflow_dispatch:
-
-jobs:
-  run-bot:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install libraries
-        run: |
-          pip install NorenRestApiPy pyotp pandas requests pytz websocket-client
-
-      - name: Run bot
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          SHOONYA_USER: ${{ secrets.SHOONYA_USER }}
-          SHOONYA_PWD: ${{ secrets.SHOONYA_PWD }}
-          SHOONYA_VC: ${{ secrets.SHOONYA_VC }}
-          SHOONYA_APIKEY: ${{ secrets.SHOONYA_APIKEY }}
-          SHOONYA_TOTP: ${{ secrets.SHOONYA_TOTP }}
-        run: python telegram_bot.py
+  workflow_dispatch:  # ← Only runs when YOU manually trigger it
+  # All schedule lines deleted
