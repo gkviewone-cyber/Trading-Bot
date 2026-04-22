@@ -66,6 +66,7 @@ class ShoonyaApiPy(NorenApi):
 def shoonya_login():
     """Login to Shoonya and return api object, or None on failure."""
     try:
+        time.sleep(2)  # Small delay to avoid rate limiting
         api = ShoonyaApiPy()
         totp_secret = os.getenv('SHOONYA_TOTP')
         if not totp_secret:
@@ -73,6 +74,7 @@ def shoonya_login():
             return None
 
         totp = pyotp.TOTP(totp_secret).now()
+        print(f"🔑 Attempting login for user: {os.getenv('SHOONYA_USER')}")
 
         ret = api.login(
             userid      = os.getenv('SHOONYA_USER'),
