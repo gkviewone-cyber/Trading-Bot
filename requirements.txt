@@ -1,7 +1,9 @@
-pyTelegramBotAPI
 NorenRestApiPy
 pyotp
 pandas
+requests
 pytz
 websocket-client
-Flask
+flask
+pyTelegramBotAPI
+schedule
