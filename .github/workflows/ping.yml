@@ -1,16 +1,1 @@
-name: Keep Render Awake (Market Hours)
-on:
-  schedule:
-    - cron: '*/10 3-10 * * 1-5'  # 8:30 AM to 4:00 PM IST (UTC+5:30)
-jobs:
-  ping:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Ping Render URL
-        run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" https://trading-bot-qsjg.onrender.com/)
-          echo "Render responded with HTTP $response"
-          if [ "$response" != "200" ]; then
-            echo "⚠️ Render might be down!"
-            exit 1
-          fi
+
