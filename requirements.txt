@@ -3,3 +3,4 @@ pyotp
 requests
 pytz
 flask
+websocket-client
