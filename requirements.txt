@@ -1,9 +1,5 @@
 NorenRestApiPy
 pyotp
-pandas
 requests
 pytz
-websocket-client
 flask
-pyTelegramBotAPI
-schedule
