@@ -1,0 +1,36 @@
+name: Market Scanner (Serverless)
+
+on:
+  workflow_dispatch: # Allows you to test it manually
+  schedule:
+    # Runs every 5 mins from ~8:30 AM to ~3:30 PM IST (Monday-Friday)
+    - cron: '*/5 3-10 * * 1-5'
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Scanner
+        env:
+          SHOONYA_USER: ${{ secrets.SHOONYA_USER }}
+          SHOONYA_PWD: ${{ secrets.SHOONYA_PWD }}
+          SHOONYA_TOTP: ${{ secrets.SHOONYA_TOTP }}
+          SHOONYA_VC: ${{ secrets.SHOONYA_VC }}
+          SHOONYA_APIKEY: ${{ secrets.SHOONYA_APIKEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RENDER_URL: 'https://trading-bot-qsjg.onrender.com'
+        run: python scanner.py
